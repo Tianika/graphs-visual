@@ -1,0 +1,13 @@
+body {
+  min-height: 100vh;
+}
+
+.app {
+  padding: 20px;
+}
+
+.app select {
+  width: 170px;
+  padding: 10px;
+  border-radius: 5px;
+}
