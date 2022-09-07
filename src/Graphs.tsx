@@ -1,21 +1,19 @@
-import { DragEvent, useEffect, useState } from 'react';
+import { DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Coord, GraphsProps } from './utils/types';
-import { useRefsArray } from './utils/utils';
 import './Graphs.css';
 
 const Graphs = ({ graphs }: GraphsProps) => {
   const [nodes, setNodes] = useState(graphs.nodes);
-  const [graphForDraw, setGraphForDraw] = useState<number[][]>([]);
   const [lineCoords, setLineCoords] = useState<Coord[] | null>(null);
   const [startId, setStartId] = useState<number>();
   const [endId, setEndId] = useState<number>();
+  const [dragId, setDragId] = useState<number>();
+  const [dropId, setDropId] = useState<number>();
 
-  const refs = useRefsArray(graphs.nodes.length);
+  const refs = useRef<(HTMLDivElement | null)[]>([]);
 
   function getVertexes() {
-    if (!graphs) return;
-
-    const vertexes = [];
+    const vertexes: number[][] = [];
 
     const startVertexes = getStartVertex();
     vertexes.push(startVertexes);
@@ -27,7 +25,7 @@ const Graphs = ({ graphs }: GraphsProps) => {
       nextVertexes = getNextVertex(nextVertexes);
     }
 
-    setGraphForDraw(vertexes);
+    return vertexes;
   }
 
   function getStartVertex() {
@@ -57,12 +55,12 @@ const Graphs = ({ graphs }: GraphsProps) => {
   function getCoordsForLine() {
     const newCoords: Coord[] = [];
 
-    const offsetX = refs[0].current?.getBoundingClientRect().x;
-    const offsetY = refs[0].current?.getBoundingClientRect().y;
+    const offsetX = refs.current[0]?.getBoundingClientRect().x;
+    const offsetY = refs.current[0]?.getBoundingClientRect().y;
 
     graphs.edges.forEach(({ fromId, toId }) => {
-      const pointLeft = refs[fromId].current?.getBoundingClientRect();
-      const pointRight = refs[toId].current?.getBoundingClientRect();
+      const pointLeft = refs.current[fromId]?.getBoundingClientRect();
+      const pointRight = refs.current[toId]?.getBoundingClientRect();
 
       if (pointLeft && pointRight && offsetX && offsetY) {
         const x1 = pointLeft.right - offsetX;
@@ -99,7 +97,7 @@ const Graphs = ({ graphs }: GraphsProps) => {
     const { target } = event;
 
     if (target instanceof HTMLElement) {
-      target.classList.add('drag');
+      setDragId(id);
     }
 
     setStartId(id);
@@ -109,7 +107,7 @@ const Graphs = ({ graphs }: GraphsProps) => {
     const { target } = event;
 
     if (target instanceof HTMLElement) {
-      target.classList.remove('drop-zone');
+      setDropId(undefined);
     }
 
     setEndId(undefined);
@@ -119,7 +117,8 @@ const Graphs = ({ graphs }: GraphsProps) => {
     const { target } = event;
 
     if (target instanceof HTMLElement) {
-      target.classList.remove('drag');
+      setDragId(undefined);
+      setDropId(undefined);
     }
 
     if (startId !== undefined && endId !== undefined) {
@@ -132,29 +131,23 @@ const Graphs = ({ graphs }: GraphsProps) => {
     const { target } = event;
 
     if (target instanceof HTMLElement) {
-      target.classList.add('drop-zone');
+      setDropId(id);
       setEndId(id);
     }
   }
 
-  useEffect(() => {
-    if (!graphs) return;
+  const graphForDraw = useMemo(getVertexes, []);
 
-    getVertexes();
-  }, [graphs]);
-
-  useEffect(() => {
-    getCoordsForLine();
-  }, [graphForDraw]);
+  useEffect(getCoordsForLine, [graphForDraw]);
 
   return (
     <div className='graph-container'>
       <div className='graphs'>
-        {graphForDraw.length > 0 &&
-          graphForDraw.map((row, rowIndex) => {
+        {graphForDraw &&
+          graphForDraw.map((column, columnIndex) => {
             return (
-              <div key={`row${rowIndex}`} className='vertex-column'>
-                {row.map((vertex) => {
+              <div key={`column${columnIndex}`} className='vertex-column'>
+                {column.map((vertex) => {
                   if (!graphs) return null;
 
                   const { id, name } = nodes[vertex];
@@ -162,9 +155,11 @@ const Graphs = ({ graphs }: GraphsProps) => {
                   return (
                     <div
                       key={id + name}
-                      className='vertex'
+                      className={`vertex ${dragId === id ? 'drag' : ''} ${
+                        dropId === id ? 'drop-zone' : ''
+                      }`}
                       draggable
-                      ref={refs[id]}
+                      ref={(el) => (refs.current[id] = el)}
                       onDragStart={(event) => dragStartHandler(event, id)}
                       onDragLeave={(event) => dragLeaveHandler(event)}
                       onDragEnd={dragEndHandler}
