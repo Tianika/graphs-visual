@@ -1,9 +1,9 @@
-import { DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { DragEvent, useLayoutEffect, useRef, useState } from 'react';
 import { Coord, GraphsProps } from './utils/types';
 import './Graphs.css';
 
 const Graphs = ({ graphs }: GraphsProps) => {
-  const [nodes, setNodes] = useState(graphs.nodes);
+  const [graphForDraw, setGraphForDraw] = useState<number[][] | null>(null);
   const [lineCoords, setLineCoords] = useState<Coord[] | null>(null);
   const [startId, setStartId] = useState<number>();
   const [endId, setEndId] = useState<number>();
@@ -25,7 +25,7 @@ const Graphs = ({ graphs }: GraphsProps) => {
       nextVertexes = getNextVertex(nextVertexes);
     }
 
-    return vertexes;
+    setGraphForDraw(vertexes);
   }
 
   function getStartVertex() {
@@ -53,10 +53,13 @@ const Graphs = ({ graphs }: GraphsProps) => {
   }
 
   function getCoordsForLine() {
-    const newCoords: Coord[] = [];
+    if (!graphForDraw) return;
 
-    const offsetX = refs.current[0]?.getBoundingClientRect().x;
-    const offsetY = refs.current[0]?.getBoundingClientRect().y;
+    const newCoords: Coord[] = [];
+    const startIndex = graphForDraw[0][0];
+
+    const offsetX = refs.current[startIndex]?.getBoundingClientRect().x;
+    const offsetY = refs.current[startIndex]?.getBoundingClientRect().y;
 
     graphs.edges.forEach(({ fromId, toId }) => {
       const pointLeft = refs.current[fromId]?.getBoundingClientRect();
@@ -81,16 +84,16 @@ const Graphs = ({ graphs }: GraphsProps) => {
     setLineCoords(newCoords);
   }
 
-  function changeNodes(startId: number, endId: number) {
-    const newNodes = [...nodes];
+  function changeNodes(startId: number, endId: number, columnIndex: number) {
+    if (!graphForDraw) return;
 
-    const startName = newNodes[startId].name;
-    const endName = newNodes[endId].name;
+    const newGraphsForDraw = [...graphForDraw];
+    const column = newGraphsForDraw[columnIndex];
+    newGraphsForDraw[columnIndex] = column.map((vertex) => {
+      return vertex === startId ? endId : vertex === endId ? startId : vertex;
+    });
 
-    newNodes[startId].name = endName;
-    newNodes[endId].name = startName;
-
-    setNodes(newNodes);
+    setGraphForDraw(newGraphsForDraw);
   }
 
   function dragStartHandler(event: DragEvent<HTMLElement>, id: number) {
@@ -113,7 +116,7 @@ const Graphs = ({ graphs }: GraphsProps) => {
     setEndId(undefined);
   }
 
-  function dragEndHandler(event: DragEvent<HTMLElement>) {
+  function dragEndHandler(event: DragEvent<HTMLElement>, columnIndex: number) {
     const { target } = event;
 
     if (target instanceof HTMLElement) {
@@ -122,7 +125,7 @@ const Graphs = ({ graphs }: GraphsProps) => {
     }
 
     if (startId !== undefined && endId !== undefined) {
-      changeNodes(startId, endId);
+      changeNodes(startId, endId, columnIndex);
     }
   }
 
@@ -136,9 +139,8 @@ const Graphs = ({ graphs }: GraphsProps) => {
     }
   }
 
-  const graphForDraw = useMemo(getVertexes, []);
-
-  useEffect(getCoordsForLine, [graphForDraw]);
+  useLayoutEffect(getVertexes, []);
+  useLayoutEffect(getCoordsForLine, [graphForDraw]);
 
   return (
     <div className='graph-container'>
@@ -150,7 +152,7 @@ const Graphs = ({ graphs }: GraphsProps) => {
                 {column.map((vertex) => {
                   if (!graphs) return null;
 
-                  const { id, name } = nodes[vertex];
+                  const { id, name } = graphs.nodes[vertex];
 
                   return (
                     <div
@@ -162,7 +164,7 @@ const Graphs = ({ graphs }: GraphsProps) => {
                       ref={(el) => (refs.current[id] = el)}
                       onDragStart={(event) => dragStartHandler(event, id)}
                       onDragLeave={(event) => dragLeaveHandler(event)}
-                      onDragEnd={dragEndHandler}
+                      onDragEnd={(event) => dragEndHandler(event, columnIndex)}
                       onDragOver={(event) => dragOverHandler(event, id)}
                     >
                       {name}
