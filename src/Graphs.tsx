@@ -1,5 +1,5 @@
 import { DragEvent, useLayoutEffect, useRef, useState } from 'react';
-import { Coord, GraphsProps } from './utils/types';
+import { Coord, GraphsProps, Graph, GraphNodeMap, NodesMap } from './utils/types';
 import './Graphs.css';
 
 const Graphs = ({ graphs }: GraphsProps) => {
@@ -9,47 +9,74 @@ const Graphs = ({ graphs }: GraphsProps) => {
   const [endId, setEndId] = useState<number>();
   const [dragId, setDragId] = useState<number>();
   const [dropId, setDropId] = useState<number>();
+  const [nodesMap, setNodesMap] = useState<NodesMap>();
 
   const refs = useRef<(HTMLDivElement | null)[]>([]);
 
+  function getNodesMap() {
+    const nodes: NodesMap = graphs.nodes.reduce(
+      (acc, { id, name }) => ({
+        ...acc,
+        [id]: { name, toId: [], fromId: [], weight: 0 },
+      }),
+      {}
+    );
+
+    graphs.edges.forEach(({ fromId, toId }) => {
+      nodes[fromId].toId.push(toId);
+      nodes[toId].fromId.push(fromId);
+      nodes[toId].weight += 1;
+    });
+
+    return nodes;
+  }
+
   function getVertexes() {
     const vertexes: number[][] = [];
+    const startVertexes = getStartVertexes();
 
-    const startVertexes = getStartVertex();
     vertexes.push(startVertexes);
 
-    let nextVertexes = getNextVertex(startVertexes);
+    let nextVertexes = getNextVertexes(startVertexes);
 
     while (nextVertexes.length) {
       vertexes.push(nextVertexes);
-      nextVertexes = getNextVertex(nextVertexes);
+      nextVertexes = getNextVertexes(nextVertexes);
     }
 
-    setGraphForDraw(vertexes);
+    return vertexes;
   }
 
-  function getStartVertex() {
-    const startVertexes = new Set(graphs.edges.map((edge) => edge.fromId));
+  function getStartVertexes() {
+    const startVertexes: number[] = [];
 
-    Array.from(startVertexes).map((point) => {
-      if (graphs.edges.findIndex((edge) => edge.toId === point) > -1) {
-        startVertexes.delete(point);
-      }
-    });
+    if (nodesMap) {
+      Object.entries(nodesMap).forEach(([key, value]) => {
+        if (value.weight === 0) {
+          startVertexes.push(+key);
+        }
+      });
+    }
 
     return [...startVertexes];
   }
 
-  function getNextVertex(vertexes: number[]) {
+  function getNextVertexes(startVertexes: number[]) {
     const nextVertexes: number[] = [];
 
-    graphs.edges.forEach(({ fromId, toId }) => {
-      if (vertexes.includes(fromId)) {
-        nextVertexes.push(toId);
+    if (!nodesMap) return [];
+
+    startVertexes.forEach((startVertex) => {
+      const vertexes = nodesMap[startVertex].toId;
+
+      if (vertexes.length < 2) {
+        nextVertexes.push(...vertexes);
+      } else {
+        nextVertexes.push(...vertexes.sort((a, b) => nodesMap[a].weight - nodesMap[b].weight));
       }
     });
 
-    return Array.from(new Set(nextVertexes));
+    return [...new Set(nextVertexes)];
   }
 
   function getCoordsForLine() {
@@ -93,7 +120,7 @@ const Graphs = ({ graphs }: GraphsProps) => {
       return vertex === startId ? endId : vertex === endId ? startId : vertex;
     });
 
-    setGraphForDraw(newGraphsForDraw);
+    return newGraphsForDraw;
   }
 
   function dragStartHandler(event: DragEvent<HTMLElement>, id: number) {
@@ -125,7 +152,11 @@ const Graphs = ({ graphs }: GraphsProps) => {
     }
 
     if (startId !== undefined && endId !== undefined) {
-      changeNodes(startId, endId, columnIndex);
+      const newGraph = changeNodes(startId, endId, columnIndex);
+
+      if (newGraph) {
+        setGraphForDraw(newGraph);
+      }
     }
   }
 
@@ -139,7 +170,12 @@ const Graphs = ({ graphs }: GraphsProps) => {
     }
   }
 
-  useLayoutEffect(getVertexes, []);
+  useLayoutEffect(() => {
+    setNodesMap(getNodesMap());
+  }, [graphs]);
+  useLayoutEffect(() => {
+    setGraphForDraw(getVertexes());
+  }, [nodesMap]);
   useLayoutEffect(getCoordsForLine, [graphForDraw]);
 
   return (

@@ -17,12 +17,13 @@ function App() {
       return;
     }
 
-    const data: Graph = await fetchGraphs(`/api/graphs/${value}`);
+    const data = await fetchGraphs(`/api/graphs/${value}`);
     setGraphs(data);
   }
 
   async function getGraphsList() {
     const data = await fetchGraphs('/api/graphs');
+
     setGraphsList(data);
   }
 

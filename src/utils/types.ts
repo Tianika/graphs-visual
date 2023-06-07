@@ -27,3 +27,12 @@ export type Coord = {
 export type GraphsProps = {
   graphs: Graph;
 };
+
+export type GraphNodeMap = {
+  name: string;
+  toId: number[];
+  fromId: number[];
+  weight: number;
+};
+
+export type NodesMap = Record<string, GraphNodeMap>;
